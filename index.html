@@ -1176,6 +1176,42 @@ function shipForm(qb){
 }
 function shipPhotosHtml(){const P=shPh();let s='';let j=0;SHD.t.forEach(x=>{if(typeof x!=='string')return;const jj=j++;if(!/تصوير|صور|فيديو/.test(x))return;const src=P['ph|'+SHs.cs+'|'+jj];s+='<div style="margin-top:10px;page-break-inside:avoid"><b>'+x.replace(/</g,'&lt;')+'</b><br>'+(src?'<img src="'+src+'" style="max-width:100%;max-height:340px;margin-top:4px;border:1px solid #999">':'<i>— بدون صورة</i>')+'</div>'});return s?'<h3 style="font-size:14px;margin-top:14px">صور التوثيق</h3>'+s:''}
 function shipDevHtml(){const ck=chkLoad(),cs=SHs.cs;let s='';SHD.n.forEach((x,i)=>{if(!ck['sh|'+cs+'|n|'+i])return;s+='<li>'+String(x[0]).replace(/</g,'&lt;')+'</li>'});return '<h3 style="font-size:14px;margin-top:14px">حالة الحيود</h3>'+(s?'<ul>'+s+'</ul>':'<div>لا توجد حيود مسجلة</div>')}
+function loadScr(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=rej;document.head.appendChild(s)})}
+function shipReportHtml(){
+ const F=shfLoad(),sum=shfCheck();
+ const rows=SHF.map(([k,l,t])=>'<tr><th style="background:#f2efe8;width:34%;text-align:right;border:1px solid #999;padding:6px">'+l+'</th><td style="border:1px solid #999;padding:6px">'+(F[k]?String(F[k]).replace(/</g,'&lt;'):'—')+'</td></tr>').join('');
+ return '<div style="font-size:18px;font-weight:800">AGREEN Quality Hub — بيانات الشحنة</div><div style="color:#666;font-size:12px;margin-bottom:12px">تعليمات الشحن WI-7-9-15 · إصدار (2)</div>'
+  +'<table style="border-collapse:collapse;width:100%">'+rows+'</table>'
+  +'<div style="margin-top:10px;font-size:13px">بنود التشيك المعمولة: '+sum.dn+' من '+sum.n+'</div>'
+  +shipPhotosHtml()+shipDevHtml()
+  +'<div style="margin-top:30px;display:flex;justify-content:space-between;font-size:13px"><div>توقيع مراقب الجودة: '+(F.sig?F.sig:'________________')+'</div><div>التاريخ: '+(F.date||'________')+'</div></div>';
+}
+async function shipPdfFile(){
+ toast('جاري تجهيز الملف...');
+ try{
+  if(!window.html2canvas)await loadScr('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+  if(!window.jspdf)await loadScr('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+ }catch(e){toast('تعذر تحميل مكتبة الـ PDF، تأكد من النت');return}
+ const box=document.createElement('div');box.dir='rtl';
+ box.style.cssText='position:fixed;left:-10000px;top:0;width:794px;background:#fff;color:#222;font-family:Tahoma,Arial,sans-serif;padding:24px;font-size:14px';
+ box.innerHTML=shipReportHtml();document.body.appendChild(box);
+ try{
+  const canvas=await html2canvas(box,{scale:2,backgroundColor:'#ffffff',useCORS:true});
+  const {jsPDF}=window.jspdf;const pdf=new jsPDF({unit:'mm',format:'a4'});
+  const pw=210,ph=297,pageH=Math.floor(canvas.width*ph/pw);
+  let pos=0,first=true;
+  while(pos<canvas.height){
+   const sl=document.createElement('canvas');sl.width=canvas.width;sl.height=Math.min(pageH,canvas.height-pos);
+   sl.getContext('2d').drawImage(canvas,0,pos,canvas.width,sl.height,0,0,sl.width,sl.height);
+   if(!first)pdf.addPage();first=false;
+   pdf.addImage(sl.toDataURL('image/jpeg',0.92),'JPEG',0,0,pw,sl.height*pw/sl.width);
+   pos+=pageH;
+  }
+  pdf.save('shipping-'+new Date().toISOString().slice(0,10)+'.pdf');
+  toast('اتحمّل الملف');
+ }catch(e){toast('حصل خطأ في إنشاء الملف')}
+ finally{box.remove()}
+}
 function shipPrint(){
  const F=shfLoad(),sum=shfCheck();const w=window.open('','_blank');if(!w){toast('المتصفح منع النافذة');return}
  const rows=SHF.map(([k,l,t])=>'<tr><th>'+l+'</th><td>'+(F[k]?String(F[k]).replace(/</g,'&lt;'):'—')+'</td></tr>').join('');
@@ -1192,7 +1228,7 @@ function renderShip(){
  og('عام',['gen']);og('الدول',['ru','by','br','vn','sa','cn','ph','eu','es','fr','nl','jp','uz','sg','my','hk','ae']);og('العملاء',['c1','c2','c3','c4']);og('أخرى',['sh']);
  sel.onchange=()=>{SHs.cs=sel.value;SHs.tab=null;renderShip();applyTr()};
  const sw=mk('div','selw');sw.appendChild(mk('label','','اختر الدولة / العميل'));sw.appendChild(sel);qb.appendChild(sw);
- const pdfb=mkE('button','btn','🖨 طباعة / حفظ PDF (بيانات + صور + حيود)');pdfb.style.cssText='width:100%;margin:6px 0';pdfb.onclick=()=>shipPrint();qb.appendChild(pdfb);
+ const pdfb=mkE('button','btn','⬇️ تحميل PDF (بيانات + صور + حيود)');pdfb.style.cssText='width:100%;margin:6px 0';pdfb.onclick=()=>shipPdfFile();qb.appendChild(pdfb);
  const T=[];if(C)T.push(['s','⭐ خاص: '+C.n]);T.push(['b','🚚 قبل التحميل'],['d','📦 أثناء التحميل'],['t','📝 التوثيق'],['n','⚠️ عدم المطابقة'],['p','🌡️ Setpoint'],['x','📷 أمثلة'],);
  const r2=mk('div','chips');r2.id='sht';T.forEach(([k,l])=>{const e=mk('button','chip',l);e.setAttribute('aria-pressed',k===SHs.tab);e.onclick=()=>{SHs.tab=SHs.tab===k?null:k;renderShip();applyTr()};r2.appendChild(e)});qb.appendChild(r2);
  const tb=SHs.tab;
